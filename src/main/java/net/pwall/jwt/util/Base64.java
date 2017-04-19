@@ -38,6 +38,7 @@ public class Base64 {
     private static final byte[] base64Bytes = new byte[64];
     private static final byte[] base64URLBytes = new byte[64];
     private static final byte[] reverseBytes = new byte[128];
+    private static final byte[] emptyBytes = new byte[0];
 
     static {
         for (int i = 0; i < 128; i++)
@@ -87,27 +88,37 @@ public class Base64 {
      */
     public static byte[] encode(byte[] data) {
         int n = data.length;
+        if (n == 0)
+            return emptyBytes;
         byte[] bytes = new byte[(n + 2) / 3 * 4];
+        int i = 0;
         int x = 0;
-        for (int i = 0; i < n; i += 3) {
-            int a = data[i];
+        int a, b, c;
+        int nm3 = n - 3;
+        while (i <= nm3) {
+            a = data[i++];
+            b = data[i++];
+            c = data[i++];
             bytes[x++] = base64Bytes[(a >> 2) & 0x3F];
-            if (i + 1 == n) {
+            bytes[x++] = base64Bytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)];
+            bytes[x++] = base64Bytes[((b << 2) & 0x3C) | ((c >> 6) & 0x03)];
+            bytes[x++] = base64Bytes[c & 0x3F];
+        }
+        n -= i;
+        if (n > 0) {
+            a = data[i];
+            bytes[x++] = base64Bytes[(a >> 2) & 0x3F];
+            if (n == 1) {
                 bytes[x++] = base64Bytes[(a << 4) & 0x30];
                 bytes[x++] = '=';
                 bytes[x] = '=';
-                break;
             }
-            int b = data[i + 1];
-            bytes[x++] = base64Bytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)];
-            if (i + 2 == n) {
+            else {
+                b = data[i + 1];
+                bytes[x++] = base64Bytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)];
                 bytes[x++] = base64Bytes[(b << 2) & 0x3C];
                 bytes[x] = '=';
-                break;
             }
-            int c = data[i + 2];
-            bytes[x++] = base64Bytes[((b << 2) & 0x3C) | ((c >> 6) & 0x03)];
-            bytes[x++] = base64Bytes[c & 0x3F];
         }
         return bytes;
     }
@@ -123,24 +134,33 @@ public class Base64 {
      */
     public static byte[] encodeURL(byte[] data) {
         int n = data.length;
+        if (n == 0)
+            return emptyBytes;
         byte[] bytes = new byte[(n * 4 + 2) / 3];
+        int i = 0;
         int x = 0;
-        for (int i = 0; i < n; i += 3) {
-            int a = data[i];
+        int a, b, c;
+        int nm3 = n - 3;
+        while (i <= nm3) {
+            a = data[i++];
+            b = data[i++];
+            c = data[i++];
             bytes[x++] = base64URLBytes[(a >> 2) & 0x3F];
-            if (i + 1 == n) {
-                bytes[x] = base64URLBytes[(a << 4) & 0x30];
-                break;
-            }
-            int b = data[i + 1];
             bytes[x++] = base64URLBytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)];
-            if (i + 2 == n) {
-                bytes[x] = base64URLBytes[(b << 2) & 0x3C];
-                break;
-            }
-            int c = data[i + 2];
             bytes[x++] = base64URLBytes[((b << 2) & 0x3C) | ((c >> 6) & 0x03)];
             bytes[x++] = base64URLBytes[c & 0x3F];
+        }
+        n -= i;
+        if (n > 0) {
+            a = data[i];
+            bytes[x++] = base64URLBytes[(a >> 2) & 0x3F];
+            if (n == 1)
+                bytes[x++] = base64URLBytes[(a << 4) & 0x30];
+            else {
+                b = data[i + 1];
+                bytes[x++] = base64URLBytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)];
+                bytes[x++] = base64URLBytes[(b << 2) & 0x3C];
+            }
         }
         return bytes;
     }
@@ -150,31 +170,100 @@ public class Base64 {
      *
      * @param   app     the {@link Appendable}
      * @param   data    the source data
-     * @throws IOException if thrown by the {@link Appendable}
+     * @throws  IOException if thrown by the {@link Appendable}
      * @throws  NullPointerException if the data is null
      */
     public static void appendEncoded(Appendable app, byte[] data) throws IOException {
         appendEncoded(app, data, 0, data.length);
     }
 
+    /**
+     * Append a section of a byte array to an {@link Appendable} as Base64-encoded characters.
+     *
+     * @param   app     the {@link Appendable}
+     * @param   data    the source data
+     * @param   start   the start index of the data to be encoded
+     * @param   end     the end index
+     * @throws  IOException if thrown by the {@link Appendable}
+     * @throws  NullPointerException if the data is null
+     */
     public static void appendEncoded(Appendable app, byte[] data, int start, int end)
             throws IOException {
-        for (int i = start; i < end; i++) {
-            int a = data[i];
+        int i = start;
+        int a, b, c;
+        int endm3 = end - 3;
+        while (i <= endm3) {
+            a = data[i++];
+            b = data[i++];
+            c = data[i++];
+            app.append((char)(base64Bytes[(a >> 2) & 0x3F])).
+                    append((char)(base64Bytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)])).
+                    append((char)(base64Bytes[((b << 2) & 0x3C) | ((c >> 6) & 0x03)])).
+                    append((char)(base64Bytes[c & 0x3F]));
+        }
+        int n = end - i;
+        if (n > 0) {
+            a = data[i];
             app.append((char)(base64Bytes[(a >> 2) & 0x3F]));
-            if (i + 1 == end) {
+            if (n == 1)
                 app.append((char)(base64Bytes[(a << 4) & 0x30])).append('=').append('=');
-                break;
+            else {
+                b = data[i + 1];
+                app.append((char)(base64Bytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)])).
+                        append((char)(base64Bytes[(b << 2) & 0x3C])).append('=');
             }
-            int b = data[i + 1];
-            app.append((char)(base64Bytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)]));
-            if (i + 2 == end) {
-                app.append((char)(base64Bytes[(b << 2) & 0x3C])).append('=');
-                break;
+        }
+    }
+
+    /**
+     * Append a byte array to an {@link Appendable} as Base64-encoded characters, using the URL
+     * variant of Base64.
+     *
+     * @param   app     the {@link Appendable}
+     * @param   data    the source data
+     * @throws  IOException if thrown by the {@link Appendable}
+     * @throws  NullPointerException if the data is null
+     */
+    public static void appendURLEncoded(Appendable app, byte[] data) throws IOException {
+        appendURLEncoded(app, data, 0, data.length);
+    }
+
+    /**
+     * Append a section of a byte array to an {@link Appendable} as Base64-encoded characters,
+     * using the URL variant of Base64.
+     *
+     * @param   app     the {@link Appendable}
+     * @param   data    the source data
+     * @param   start   the start index of the data to be encoded
+     * @param   end     the end index
+     * @throws  IOException if thrown by the {@link Appendable}
+     * @throws  NullPointerException if the data is null
+     */
+    public static void appendURLEncoded(Appendable app, byte[] data, int start, int end)
+            throws IOException {
+        int i = start;
+        int a, b, c;
+        int endm3 = end - 3;
+        while (i <= endm3) {
+            a = data[i++];
+            b = data[i++];
+            c = data[i++];
+            app.append((char)(base64URLBytes[(a >> 2) & 0x3F])).
+                    append((char)(base64URLBytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)])).
+                    append((char)(base64URLBytes[((b << 2) & 0x3C) | ((c >> 6) & 0x03)])).
+                    append((char)(base64URLBytes[c & 0x3F]));
+        }
+        int n = end - i;
+        if (n > 0) {
+            a = data[i];
+            app.append((char)(base64URLBytes[(a >> 2) & 0x3F]));
+            if (n == 1)
+                app.append((char)(base64URLBytes[(a << 4) & 0x30]));
+            else {
+                b = data[i + 1];
+                app.append((char)(base64URLBytes[((a << 4) & 0x30) | ((b >> 4) & 0x0F)])).
+                        append((char)(base64URLBytes[(b << 2) & 0x3C]));
             }
-            int c = data[i + 2];
-            app.append((char)(base64Bytes[((b << 2) & 0x3C) | ((c >> 6) & 0x03)]));
-            app.append((char)(base64Bytes[c & 0x3F]));
         }
     }
 
@@ -188,13 +277,13 @@ public class Base64 {
      */
     public static byte[] decode(byte[] data) {
         int n = data.length;
+        if (n == 0)
+            return emptyBytes;
         if ((n & 3) == 0) { // length divisible by 4 - could have trailing = sign(s)
-            if (n > 0) {
-                if (data[n - 1] == '='){
+            if (data[n - 1] == '='){
+                n--;
+                if (data[n - 1] == '=')
                     n--;
-                    if (data[n - 1] == '=')
-                        n--;
-                }
             }
         }
         else { // otherwise length can't be 1, 5, 9, 13 ...
@@ -203,24 +292,33 @@ public class Base64 {
         }
         byte[] bytes = new byte[(n * 3) >> 2];
         int x = 0;
-        for (int i = 0; i < n; i += 4) {
-            int a = decodeByte(data[i]);
-            int b = decodeByte(data[i + 1]);
+        int i = 0;
+        int a, b, c, d;
+        int nm4 = n - 4;
+        while (i <= nm4) {
+            a = decodeByte(data[i++]);
+            b = decodeByte(data[i++]);
+            c = decodeByte(data[i++]);
+            d = decodeByte(data[i++]);
             bytes[x++] = (byte)(((a << 2) & 0xFC) | ((b >> 4) & 0x03));
-            if (i + 2 >= n) {
+            bytes[x++] = (byte)(((b << 4) & 0xF0) | ((c >> 2) & 0xF));
+            bytes[x++] = (byte)(((c << 6) & 0xC0) | d);
+        }
+        n -= i;
+        if (n > 0) {
+            a = decodeByte(data[i]);
+            b = decodeByte(data[i + 1]);
+            bytes[x++] = (byte)(((a << 2) & 0xFC) | ((b >> 4) & 0x03));
+            if (n == 2) {
                 if ((b & 0xF) != 0)
                     throw new IllegalArgumentException("Illegal character in Base64");
-                break;
             }
-            int c = decodeByte(data[i + 2]);
-            bytes[x++] = (byte)(((b << 4) & 0xF0) | ((c >> 2) & 0xF));
-            if (i + 3 >= n) {
+            else {
+                c = decodeByte(data[i + 2]);
+                bytes[x++] = (byte)(((b << 4) & 0xF0) | ((c >> 2) & 0xF));
                 if ((c & 3) != 0)
                     throw new IllegalArgumentException("Illegal character in Base64");
-                break;
             }
-            int d = decodeByte(data[i + 3]);
-            bytes[x++] = (byte)(((c << 6) & 0xC0) | d);
         }
         return bytes;
     }
@@ -236,13 +334,13 @@ public class Base64 {
      */
     public static byte[] decode(CharSequence data) {
         int n = data.length();
+        if (n == 0)
+            return emptyBytes;
         if ((n & 3) == 0) { // length divisible by 4 - could have trailing = sign(s)
-            if (n > 0) {
-                if (data.charAt(n - 1) == '='){
+            if (data.charAt(n - 1) == '='){
+                n--;
+                if (data.charAt(n - 1) == '=')
                     n--;
-                    if (data.charAt(n - 1) == '=')
-                        n--;
-                }
             }
         }
         else { // otherwise length can't be 1, 5, 9, 13 ...
@@ -251,24 +349,33 @@ public class Base64 {
         }
         byte[] bytes = new byte[(n * 3) >> 2];
         int x = 0;
-        for (int i = 0; i < n; i += 4) {
-            int a = decodeByte(data.charAt(i));
-            int b = decodeByte(data.charAt(i + 1));
+        int i = 0;
+        int a, b, c, d;
+        int nm4 = n - 4;
+        while (i <= nm4) {
+            a = decodeByte(data.charAt(i++));
+            b = decodeByte(data.charAt(i++));
+            c = decodeByte(data.charAt(i++));
+            d = decodeByte(data.charAt(i++));
             bytes[x++] = (byte)(((a << 2) & 0xFC) | ((b >> 4) & 0x03));
-            if (i + 2 >= n) {
+            bytes[x++] = (byte)(((b << 4) & 0xF0) | ((c >> 2) & 0xF));
+            bytes[x++] = (byte)(((c << 6) & 0xC0) | d);
+        }
+        n -= i;
+        if (n > 0) {
+            a = decodeByte(data.charAt(i));
+            b = decodeByte(data.charAt(i + 1));
+            bytes[x++] = (byte)(((a << 2) & 0xFC) | ((b >> 4) & 0x03));
+            if (n == 2) {
                 if ((b & 0xF) != 0)
                     throw new IllegalArgumentException("Illegal character in Base64");
-                break;
             }
-            int c = decodeByte(data.charAt(i + 2));
-            bytes[x++] = (byte)(((b << 4) & 0xF0) | ((c >> 2) & 0xF));
-            if (i + 3 >= n) {
+            else {
+                c = decodeByte(data.charAt(i + 2));
+                bytes[x++] = (byte)(((b << 4) & 0xF0) | ((c >> 2) & 0xF));
                 if ((c & 3) != 0)
                     throw new IllegalArgumentException("Illegal character in Base64");
-                break;
             }
-            int d = decodeByte(data.charAt(i + 3));
-            bytes[x++] = (byte)(((c << 6) & 0xC0) | d);
         }
         return bytes;
     }
